@@ -3,9 +3,8 @@
 #   tail only matters in one of those
 # should be able to stop measurements at any direction
 
-#nhanna270@gmail.com
 
-from helpers import modFloor,calcEndpoint,LineBoundaries,setCircleVals,setValues,effectiveVal,relativeMin
+from sequences.helpers.helpers import modFloor,calcEndpoint,LineBoundaries,setCircleVals,setValues,effectiveVal,relativeMin
 from math import ceil
 from os import path
 
@@ -19,6 +18,9 @@ f=None
 if path.isfile(fileName):f=open(fileName,"w")
 else: f=open(fileName,"x")
 
+rA=True
+if input("Are coils right angle or stacked? (r/s)").lower()=='s':
+    rA=False
 
 thickness=setCircleVals('thickness',50)
 radius=setCircleVals('radius',170)
@@ -66,9 +68,8 @@ x=0
 
 # if i cut off on top, doesnt work overshoots where it shouldnt and undershjoots too
 
-print('y',yMin)
+
 pathRadius=modFloor(radius-buffer,increment)
-print('pathr',pathRadius)
 yTargH=min(pathRadius,yMax-increment)
 hBarrier=True if yTargH!=pathRadius else False
 #offset by 1 more at start
@@ -95,24 +96,17 @@ z=zMin
 zTarg=effectiveVal(zIncrement,setCircleVals('z-max',60))
 print (yTargH, y,yFinish)
 #doesnt really work in practice, as need to align min to be compatible with divisor, in the sense that divisor overrides min
-
 f.write(f"G0 X0 Y0 Z{z} \n\n")
 #CIRCLE
-if(yMax!=0):
-    f.write(f"G0 X{x} Y{y+increment if hBarrier else y} Z{z} \n\n")
+f.write(f"G0 X{x} Y{y} Z{z} \n\n")
 #seems to overshoot on some, under on others
 
 #think it messes up if it starts wrong because it starts counting as if it is in right place, so ends up short
 
-
-
-
-if hBarrier:y+=increment
+#if hBarrier:y+=increment
 print (yTargH, y,yFinish)
-zLimit=0
-while z<zLimit:
-    #redundant reading here...
-    
+zLimit=0 if rA else thickness
+while z<=zLimit:
     f.write(f"G1 X{x} Y{y} Z{z} (chilipeppr_pause)\n\n")
     #technically the singular point is overshooting
     print (yTargH, y,yFinish)
@@ -122,8 +116,8 @@ while z<zLimit:
     while(y>=yFinish if downwards else y<=yFinish):
         #overshoots to get the 0, but doesnt work if not full trip
         #this is one of the issues, it needs to do the line firs
-        # Not sure how to best phrase this
-        if ((y>=yTargH and hBarrier) or (y<=yTargL and lBarrier)) and partialEdgeCheck:
+        # a check like this should work, but syntax is a pain in the ass
+        if  partialEdgeCheck and ((y>yTargH and hBarrier) or (y<yTargL and lBarrier)):
             partialEdgeCheck=False
         else: y+=-increment if downwards else increment
         lineEnd=calcEndpoint(radius,y,increment,buffer)
@@ -148,9 +142,9 @@ while z<zLimit:
     yFinish=yTargL if downwards else yTargH
     if z<=zLimit:f.write(f"G1 X{x} Y{y} Z{z} \n\n")
 #above by some measure
-f.write(f"G0 X0 Y0 Z{z}\n")
+f.write(f"G0 X0 Y0 Z{z}")
 
-#deprecated feature
+
 tailCoord=0
 
 y=yMax
@@ -165,7 +159,7 @@ f.write(f"G1 Z{z} (chilipeppr_pause)\n")
 #assuming it is round tube, lower bounds will always be equal to -thickness if 0 is between two tubes
 #should it start this below level with top or with level?
 # also raises question of base collission
-while(z>=relativeMin(-thickness,zMin)):
+while(z>=-thickness):
     #print('Z',z)
     f.write(f"G1 X{x} Y{yMax} Z{z} (chilipeppr_pause)\n")
     for i in range(0,2):
@@ -190,12 +184,12 @@ while(z>=relativeMin(-thickness,zMin)):
             line.end=(calcEndpoint(oRadius,y,increment,buffer,False) * (-1 if i==0 else 1)) if abs(y)<oRadius else (0 if tailSpace==False else (-tailCoord if i==0 else tailCoord))
             #just adding extra line for clarity
             line.end=relativeMin(line.end,xMin if i==0 else xMax)
-            if tailCoord==0 and line.end!=xMax and line.end!=xMin and abs(line.end*2)>thickness+buffer:
+            if rA==False and tailCoord==0 and line.end!=xMax and line.end!=xMin and abs(line.end*2)>thickness+buffer:
                 tailCoord=abs(line.end)
                 #print("tailcoord",tailCoord)
             
-            #if abs(line.end)<=tailCoord and y<0:
-                #tailSpace=True
+            if abs(line.end)<=tailCoord and y<0:
+                tailSpace=True
 
             xTarg=(line.end if rightwards else xMin) if i==0 else ((xMax if rightwards else line.end))
             #print(x,line.end,rightwards)
@@ -212,8 +206,9 @@ while(z>=relativeMin(-thickness,zMin)):
         x=0
         f.write(f"G0 X{x} Y{yMax}\n")
     z-=zIncrement
-f.write(f"G0 X{xMin} Y{yMax} Z{0}\n")
-downwards=True
+
+f.write(f"G0 X{x} Y{y} Z{zTarg}\n")
+
 #few issues, need seperate variables for coil height and total height, so know when to switch to others, because 0 is in center of coil
 
 
@@ -224,11 +219,9 @@ downwards=True
 #square here
 
 #more precise way
-z=0
-print('z',z)
-f.write(f"G1 Z{z} (chilipeppr_pause)")
+z=zIncrement if rA else zIncrement*ceil(thickness/zIncrement)
 
-#seems to cross too much right here
+f.write(f"G1 Z{z} (chilipeppr_pause)")
 
 while(z<=zTarg):
 #a little connfusing but low meaninng start, high finish, irrespective of actual values
@@ -256,7 +249,7 @@ while(z<=zTarg):
     downwards=False if downwards else True
     #print(f"{z} z level complete\n")
 
-f.write(f"G0 X0 Y0 Z{z}")
+f.write(f"G0 X0 Y0")
 f.write(f"G0 X0 Y0 Z0")
 print('closing')
 f.close()

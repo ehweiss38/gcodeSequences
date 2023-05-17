@@ -3,7 +3,7 @@
 
 #nhanna270@gmail.com
 
-from helpers import modFloor,calcEndpoint,LineBoundaries,setCircleVals,setValues,effectiveVal,relativeMin
+from sequences.helpers.helpers import modFloor,calcEndpoint,LineBoundaries,setCircleVals,setValues,effectiveVal,relativeMin
 from math import ceil
 from os import path
 
@@ -60,28 +60,28 @@ while yMin==None:
     yMin=-effectiveVal(increment,setValues('y',False,250,oRadius))
     if yMax==None:print(f"Value must be greater than outer-radius({oRadius})")
 
-x=0
+y=0
 tail=True if yMin!=0 and xMin!=0 else False
 
 # if i cut off on top, doesnt work overshoots where it shouldnt and undershjoots too
 
 
 pathRadius=modFloor(radius-buffer,increment)
-yTargH=min(pathRadius,yMax-increment)
-hBarrier=True if yTargH!=pathRadius else False
+xTargH=min(pathRadius,xMax-increment)
+hBarrier=True if xTargH!=pathRadius else False
 #offset by 1 more at start
-y=yTargH
-if hBarrier==False:y+=increment
-yTargL=relativeMin(-pathRadius,yMin+increment)
-lBarrier=True if yTargL!=-pathRadius else False
+x=xTargH
+if hBarrier==False:x+=increment
+xTargL=relativeMin(-pathRadius,xMin+increment)
+lBarrier=True if xTargL!=-pathRadius else False
 #not sure if this is ideal
 # f.write(f"G0 X{x} Y{y} Z0\n\n")
 
 #can still do it otherwise, just only go as far as if it divisible
 #deciding to work from center, even though it takes longer
 #reason being is other wise, there could be some combinations of buffers and increments that wouldnt be centered a 0
-yStart=yTargH
-yFinish=yTargL
+xStart=xTargH
+xFinish=xTargL
 downwards=True
 rightwards=True
 zIncrement=setCircleVals('z-increment',30)
@@ -92,8 +92,8 @@ zTarg=effectiveVal(zIncrement,setCircleVals('z-max',60))
 
 f.write(f"G0 X0 Y0 Z{z} \n\n")
 #CIRCLE
-if(yMax!=0):
-    f.write(f"G0 X{x} Y{y+increment if hBarrier else y} Z{z} \n\n")
+if(xMax!=0):
+    f.write(f"G0 X{x +increment if hBarrier else x} Y{y} Z{z} \n\n")
 #seems to overshoot on some, under on others
 
 #think it messes up if it starts wrong because it starts counting as if it is in right place, so ends up short
@@ -101,7 +101,7 @@ if(yMax!=0):
 
 
 
-if hBarrier:y+=increment
+if hBarrier:x+=increment
 zLimit=thickness
 while z<zLimit:
     #redundant reading here...
@@ -111,33 +111,33 @@ while z<zLimit:
     #need to consider endpoint, returning to that center spot
     #you do want this, however, that means it should offset by -1 at start
     partialEdgeCheck=True
-    while(y>=yFinish if downwards else y<=yFinish):
+    while(x>=xFinish if downwards else x<=xFinish):
         #overshoots to get the 0, but doesnt work if not full trip
         #this is one of the issues, it needs to do the line firs
         # Not sure how to best phrase this
-        if ((y>=yTargH and hBarrier) or (y<=yTargL and lBarrier)) and partialEdgeCheck:
+        if ((x>=xTargH and hBarrier) or (x<=xTargL and lBarrier)) and partialEdgeCheck:
             partialEdgeCheck=False
-        else: y+=-increment if downwards else increment
-        lineEnd=calcEndpoint(radius,y,increment,buffer)
+        else: x+=-increment if downwards else increment
+        lineEnd=calcEndpoint(radius,x,increment,buffer)
         
         #error is xTarg when going left
-        x=relativeMin(-lineEnd if rightwards else lineEnd,xMin if rightwards else xMax)
+        y=relativeMin(-lineEnd if rightwards else lineEnd,yMin if rightwards else yMax)
         #xTarg 
-        xTarg=relativeMin(lineEnd if rightwards else -lineEnd,xMax if rightwards else xMin)
+        yTarg=relativeMin(lineEnd if rightwards else -lineEnd,yMax if rightwards else yMin)
         #the issue is if it is full you want the extra point (only 1 x), but otherwise you want it to stop
 
         #not yTarg cuz its always tgat
         #almost made it worse
         #its not the equals that is probelmatic, it is the next one that should only happen if it matxhes
         f.write(f"G1 X{x} Y{y} (chilipeppr_pause)\n")
-        while x<xTarg if rightwards else x>xTarg:
-            x+=increment if rightwards else -increment
+        while y<yTarg if rightwards else x>yTarg:
+            y+=increment if rightwards else -increment
             #if y==yFinish:x=0
             f.write(f"G1 X{x} Y{y} (chilipeppr_pause)\n")
         rightwards=False if rightwards else True
     downwards=False if downwards else True
     z+=zIncrement
-    yFinish=yTargL if downwards else yTargH
+    xFinish=xTargL if downwards else xTargH
     if z<=zLimit:f.write(f"G1 X{x} Y{y} Z{z};layer {z} \n\n")
 #above by some measure
 f.write(f"G0 X0 Y0 Z{z};layer {z}\n")
@@ -145,9 +145,9 @@ f.write(f"G0 X0 Y0 Z{z};layer {z}\n")
 #deprecated feature
 tailCoord=0
 
-y=yMax
+x=xMax
 #still above
-print(x)
+print(y)
 f.write(f"G1 X{x} Y{y} (chilipeppr_pause)\n")
 z-=zIncrement
 #moves down
@@ -165,54 +165,54 @@ f.write(f"G0 X{x} Y{y} Z{z} (chilipeppr_pause);layer {z}\n")
 # also raises question of base collission
 while(z>=-thickness):
     #print('Z',z)
-    f.write(f"G1 X{x} Y{yMax} Z{z} (chilipeppr_pause);layer {z}\n")
+    f.write(f"G1 X{xMax} Y{y} Z{z} (chilipeppr_pause);layer {z}\n")
     for i in range(0,2):
         tailSpace=False
         rightwards=True if i==1 else False
-        xTarg=xMax if rightwards else xMin
+        yTarg=yMax if rightwards else yMin
         #tecnically overshoots a little and goes back
-        while y>=yMin:
+        while x>=xMin:
             #still need to put line switch in 
             #also need to consider before where circle starts
                 #logic would be if(abs(y)>oRadius)
-            while x<xTarg if rightwards else x>xTarg:
-                x+=increment if rightwards else -increment
+            while y<yTarg if rightwards else y>yTarg:
+                y+=increment if rightwards else -increment
                 f.write(f"G1 X{x} Y{y} (chilipeppr_pause)\n")
-            y-=increment
+            x-=increment
             rightwards=False if rightwards else True
-            line=LineBoundaries(y)
+            line=LineBoundaries(x)
             #print(y,oRadius)
             #best way is to adjust for widest point in circle before it closes
             #more specifically wide enough to fit thickness and buffer
             #when it reaches that width on bottom 
             line.end=(calcEndpoint(oRadius,y,increment,buffer,False) * (-1 if i==0 else 1)) if abs(y)<oRadius else (0 if tailSpace==False else (-tailCoord if i==0 else tailCoord))
             #just adding extra line for clarity
-            line.end=relativeMin(line.end,xMin if i==0 else xMax)
-            if tailCoord==0 and line.end!=xMax and line.end!=xMin and abs(line.end*2)>thickness+buffer:
+            line.end=relativeMin(line.end,yMin if i==0 else yMax)
+            if tailCoord==0 and line.end!=yMax and line.end!=yMin and abs(line.end*2)>thickness+buffer:
                 tailCoord=abs(line.end)
                 print("tailcoord",tailCoord)
             
-            if abs(line.end)<=tailCoord and y<0:
+            if abs(line.end)<=tailCoord and x<0:
                 tailSpace=True
 
-            xTarg=(line.end if rightwards else xMin) if i==0 else ((xMax if rightwards else line.end))
+            yTarg=(line.end if rightwards else yMin) if i==0 else ((yMax if rightwards else line.end))
             #print(x,line.end,rightwards)
-            x=(x if rightwards else line.end) if i==0 else ((line.end if rightwards else x))
-            if y>=yMin:f.write(f"G1 X{x} Y{y} (chilipeppr_pause)\n")
+            y=(y if rightwards else line.end) if i==0 else ((line.end if rightwards else y))
+            if x>=xMin:f.write(f"G1 X{x} Y{y} (chilipeppr_pause)\n")
             #add cable gap later 
-        if x!=(xMin if i==0 else xMax):
+        if y!=(yMin if i==0 else yMax):
             #this is a major logic error, and it is causing the error
-            x=xMin if i==0 else xMax
+            y=yMin if i==0 else yMax
         #f.write(f"G0 X{x} Y{y}\n")
         #i am a little confused about the little tails but it is not a huge deal
-        y=yMax
+        x=xMax
         f.write(f"G0 X{x} Y{y}\n")
-        x=0
+        y=0
         f.write(f"G0 X{x} Y{y}\n")
     z-=zIncrement
     print(x,y)
-x=xMax
-f.write(f"G0 X{x} Y{yMax} Z{0};layer {z}\n")
+y=yMax
+f.write(f"G0 X{xMax} Y{y} Z{0};layer {z}\n")
 downwards=True
 #few issues, need seperate variables for coil height and total height, so know when to switch to others, because 0 is in center of coil
 
@@ -226,28 +226,28 @@ downwards=True
 #more precise way
 z= ceil(thickness/zIncrement)*zIncrement
 
-f.write(f"G1 X{x} Y{yMax}Z{z} (chilipeppr_pause);layer {z}\n")
+f.write(f"G1 X{xMax} Y{y}Z{z} (chilipeppr_pause);layer {z}\n")
 
 #seems to cross too much right here
 
 #print('z',z,'ztarg',zTarg)
 while(z<=zTarg):
 #a little connfusing but low meaninng start, high finish, irrespective of actual values
-    lowY=yMax if downwards else yMin
-    highY=yMin if downwards else yMax
-    y=lowY
-    while((downwards and y>=highY) or (downwards==False and y<=highY)):
+    lowX=xMax if downwards else xMin
+    highX=xMin if downwards else xMax
+    x=lowX
+    while((downwards and x>=highX) or (downwards==False and x<=highX)):
        # print(x,y)
-        lowX=xMin if rightwards else xMax
-        highX=xMax if rightwards else xMin
-        x=lowX
-        while (x!=highX):
-            x+=increment if rightwards else -1*increment
-            f.write(f"G1 X{x} (chilipeppr_pause)\n")
+        lowY=yMin if rightwards else yMax
+        highY=yMax if rightwards else yMin
+        y=lowY
+        while (y!=highY):
+            y+=increment if rightwards else -1*increment
+            f.write(f"G1 Y{y} (chilipeppr_pause)\n")
     
         #end behavior
         rightwards=False if rightwards else True
-        if y!=highY:y+=-1*increment if downwards else increment
+        if x!=highY:x+=-1*increment if downwards else increment
         else: break
         f.write(f"G1 X{x} Y{y} Z{z} (chilipeppr_pause);layer {z}\n")
         #print(f"{y}-y {z}-z level complete\n")
