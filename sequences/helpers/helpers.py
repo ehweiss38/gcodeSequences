@@ -25,10 +25,10 @@ def modFloor(number,divisor):
         --number
     return number*10
 
-def setValues(name:str,maximum:bool,default:float,min:float=None):
+def setValues(name:str,maximum:bool,default:float,min:float=None,absV=False):
     inpVal=input(f"Enter {'maximum' if maximum else 'minimum'} {name}-value (cm)")
     if len(inpVal)==0 or isnan(float(inpVal)):return default
-    val=abs(float(inpVal)*10)
+    val=abs(float(inpVal)*10) if absV else float(inpVal)*10
     #if min!=None and val<min:return None
     return val
 def setIncrement(name:str,default:float):

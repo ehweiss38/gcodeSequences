@@ -1,8 +1,12 @@
 #important changes 
-# Quadrant
+#different increments
+    #messes up inner circle( malformed, too close, overshoots y)
+    #weird polygons elsewhere
+
+# one of the prevailing issues is trying to accomodate both partial and full readings. Switching to quadrant would make this more manageable 
 
 
-from sequences.helpers.helpers import modFloor,calcEndpoint,LineBoundaries,setCircleVals,setValues,effectiveVal,relativeMin
+from helpers.helpers import modFloor,calcEndpoint,LineBoundaries,setCircleVals,setValues,effectiveVal,relativeMin
 from math import ceil
 from os import path
 
@@ -26,6 +30,7 @@ increment=setCircleVals('increment',10)
 
 #the main improvement that is needed is that when it is above the circle, it no longer needs to follow the outline and can do the whole square
 
+#also looks like it may offset to different lines
 
 
 
@@ -41,35 +46,43 @@ f.write("G28.3 X0 Y0 Z0 \n")
 
 
 oRadius=radius+thickness
-xMax=None
+xInput=None
+yInput=None
+
+#change to dimensions, assigns to min or max
 #need to further consider negative cases
-while xMax==None:
-    xMax=effectiveVal(increment,setValues('x',True,250,oRadius))
-    if xMax==None:print(f"Value must be greater than outer-radius({oRadius})")
-xMin=None
-while xMin==None:
-    xMin=-effectiveVal(increment,setValues('x',False,250,oRadius))
-    if xMax==None:print(f"Value must be greater than outer-radius({oRadius})")
-yMax=None
-while yMax==None:
-    yMax=effectiveVal(increment,setValues('y',True,250,oRadius))
-    if yMax==None:print(f"Value must be greater than outer-radius({oRadius})")
-yMin=None
-while yMin==None:
-    yMin=-effectiveVal(increment,setValues('y',False,250,oRadius))
-    if yMax==None:print(f"Value must be greater than outer-radius({oRadius})")
+while xInput==None:
+    xInput=effectiveVal(increment,setValues('x',True,280,oRadius,False))
+    if xInput==None:print(f"Value must be greater than outer-radius({oRadius})")
+while yInput==None:
+    yInput=effectiveVal(increment,setValues('y',True,280,oRadius,False))
+    if yInput==None:print(f"Value must be greater than outer-radius({oRadius})")
+
+xMin=min(0,xInput)
+xMax=max(0,xInput)
+
+yMin=min(0,yInput)
+yMax=max(0,yInput)
+
 
 x=0
 
 # if i cut off on top, doesnt work overshoots where it shouldnt and undershjoots too
 
 print('y',yMin)
+#why minus buffer, seems to work elsewhere (it is to set inner edge)
 pathRadius=modFloor(radius-buffer,increment)
 print('pathr',pathRadius)
+#not sure why dropping the increment here, but minus plus is to reflect opposite valss
+# i think it does it because it does <= so it equals that on final iteration
 yTargH=min(pathRadius,yMax-increment)
+
+#relative barriers, I think this logic is a little convoluted, not the issue though
 hBarrier=True if yTargH!=pathRadius else False
 #offset by 1 more at start
+
 y=yTargH
+#sets it back so that it gets the point. If i change to the assumption that
 if hBarrier==False:y+=increment
 print(radius,yTargH)
 yTargL=relativeMin(-pathRadius,yMin+increment)
@@ -84,9 +97,12 @@ print('h',yTargH,'l',yTargL)
 yStart=yTargH
 yFinish=yTargL
 downwards=True
+#for first circle, this is always true
 rightwards=True
-zIncrement=setCircleVals('z-increment',30)
-zMin=-1*effectiveVal(zIncrement,setCircleVals('z-min',60))
+
+
+zIncrement=setCircleVals('z-increment',20)
+zMin=-1*effectiveVal(zIncrement,setCircleVals('z-min',40))
 print('zmin',zMin)
 z=zMin
 zTarg=effectiveVal(zIncrement,setCircleVals('z-max',60))
@@ -101,6 +117,7 @@ if(yMax!=0):
 
 #think it messes up if it starts wrong because it starts counting as if it is in right place, so ends up short
 
+#need to move at right angles inwards
 
 
 
@@ -159,59 +176,64 @@ f.write(f"G1 Z{z} (chilipeppr_pause)\n")
 
 #clearance so i
 
-#assuming it is round tube, lower bounds will always be equal to -thickness if 0 is between two tubes
-#should it start this below level with top or with level?
-# also raises question of base collission
+
+
+xPositive=True if xMax!=0 else False
+#main source of issue
 while(z>=relativeMin(-thickness,zMin)):
     #print('Z',z)
     f.write(f"G1 X{x} Y{yMax} Z{z} (chilipeppr_pause)\n")
-    for i in range(0,2):
-        tailSpace=False
-        rightwards=True if i==1 else False
-        xTarg=xMax if rightwards else xMin
-        #tecnically overshoots a little and goes back
-        while y>=yMin:
-            #still need to put line switch in 
-            #also need to consider before where circle starts
-                #logic would be if(abs(y)>oRadius)
-            while x<xTarg if rightwards else x>xTarg:
-                x+=increment if rightwards else -increment
-                f.write(f"G1 X{x} Y{y} (chilipeppr_pause)\n")
-            y-=increment
-            rightwards=False if rightwards else True
-            line=LineBoundaries(y)
-            #print(y,oRadius)
-            #best way is to adjust for widest point in circle before it closes
-            #more specifically wide enough to fit thickness and buffer
-            #when it reaches that width on bottom 
-            line.end=(calcEndpoint(oRadius,y,increment,buffer,False) * (-1 if i==0 else 1)) if abs(y)<oRadius else (0 if tailSpace==False else (-tailCoord if i==0 else tailCoord))
-            #just adding extra line for clarity
-            line.end=relativeMin(line.end,xMin if i==0 else xMax)
-            if tailCoord==0 and line.end!=xMax and line.end!=xMin and abs(line.end*2)>thickness+buffer:
-                tailCoord=abs(line.end)
-                #print("tailcoord",tailCoord)
+    #needs to go
+    #can broadly be replaced by representing overall direction of reading relative to center
+    tailSpace=False
+    rightwards=True if xPositive else False
+    xTarg=xMax if rightwards else xMin
+    #tecnically overshoots a little and goes back
+    while y>=yMin:
+        #still need to put line switch in 
+        #also need to consider before where circle starts
+            #logic would be if(abs(y)>oRadius)
+        while x<xTarg if rightwards else x>xTarg:
+            x+=increment if rightwards else -increment
+            f.write(f"G1 X{x} Y{y} (chilipeppr_pause)\n")
+        y-=increment
+        rightwards=False if rightwards else True
+        line=LineBoundaries(y)
             
-            #if abs(line.end)<=tailCoord and y<0:
-                #tailSpace=True
 
-            xTarg=(line.end if rightwards else xMin) if i==0 else ((xMax if rightwards else line.end))
-            #print(x,line.end,rightwards)
-            x=(x if rightwards else line.end) if i==0 else ((line.end if rightwards else x))
-            if y>=yMin:f.write(f"G1 X{x} Y{y} (chilipeppr_pause)\n")
-            #add cable gap later 
-        if x!=(xMin if i==0 else xMax):
-            #doesnt need to redeclare but i feel like it majkes it more clear/ easier to trace flow & errorss
-            x=xMin if i==0 else xMax
-        #f.write(f"G0 X{x} Y{y}\n")
-        #i am a little confused about the little tails but it is not a huge deal
-        y=yMax
-        f.write(f"G0 X{x} Y{yMax}\n")
-        x=0
-        f.write(f"G0 X{x} Y{yMax}\n")
+        # i think solution might be to maintain movement of single increment while only measuring if %2=0  
+        #needs to change
+        line.end=(calcEndpoint(oRadius,y,increment,buffer,False) * (1 if xPositive else -1)) if abs(y)<oRadius else (0 if tailSpace==False else (tailCoord if xPositive else -tailCoord))
+        #tail coord will only be relevant for 1 quadrant
+        if tailCoord==0 and line.end!=xMax and line.end!=xMin and abs(line.end*2)>thickness+buffer:
+            tailCoord=abs(line.end)
+            #print("tailcoord",tailCoord)
+            
+        #if abs(line.end)<=tailCoord and y<0:
+            #tailSpace=True
+
+        #change
+        xTarg=(xMax if rightwards else line.end) if xPositive else (line.end if rightwards else xMin)
+        #print(x,line.end,rightwards)
+        x=(line.end if rightwards else x) if xPositive else (xMax if rightwards else line.end)
+        if y>=yMin:f.write(f"G1 X{x} Y{y} (chilipeppr_pause)\n")
+        #add cable gap later 
+    if x!=(xMax if xPositive else xMin):
+        #doesnt need to redeclare but i feel like it majkes it more clear/ easier to trace flow & errorss
+        x=xMax if xPositive else xMin
+    #f.write(f"G0 X{x} Y{y}\n")
+    #i am a little confused about the little tails but it is not a huge deal
+    y=yMax
+    f.write(f"G0 X{x} Y{yMax}\n")
+    x=0
+    f.write(f"G0 X{x} Y{yMax}\n")
+
     z-=zIncrement
 f.write(f"G0 X{xMin} Y{yMax} Z{0}\n")
 downwards=True
 #few issues, need seperate variables for coil height and total height, so know when to switch to others, because 0 is in center of coil
+
+
 
 
 #cant do these moves, need to really consider possibilities
