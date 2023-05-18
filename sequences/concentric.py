@@ -4,8 +4,16 @@
 #7 radius, 1 inch increment both directions, 
 
 
+#1 thickness from center
+#iteration 1: <outer radius and negative regular
+    #=outer radius->thickness: -thickness
+    #after all the way to the end
+#iteration 2:
+    #stop at oradius-buffer
 
-from sequences.helpers.helpers import modFloor,calcEndpoint,LineBoundaries,setCircleVals,setValues,effectiveVal,relativeMin
+
+
+from helpers.helpers import modFloor,calcEndpoint,LineBoundaries,setCircleVals,setValues,effectiveVal,relativeMin
 from math import ceil
 from os import path
 
@@ -170,9 +178,12 @@ while(z>=-thickness):
     #print('Z',z)
     f.write(f"G1 X{x} Y{yMax} Z{z} (chilipeppr_pause);layer {z}\n")
     for i in range(0,2):
+        tailZone=False
         tailSpace=False
         rightwards=True if i==1 else False
         xTarg=xMax if rightwards else xMin
+        if i==2:
+            yMin=-oRadius+increment
         #tecnically overshoots a little and goes back
         while y>=yMin:
             #still need to put line switch in 
@@ -182,22 +193,26 @@ while(z>=-thickness):
                 x+=increment if rightwards else -increment
                 f.write(f"G1 X{x} Y{y} (chilipeppr_pause)\n")
             y-=increment
+            if y<=-oRadius+increment:
+                    tailZone=True
             rightwards=False if rightwards else True
             line=LineBoundaries(y)
             #print(y,oRadius)
             #best way is to adjust for widest point in circle before it closes
             #more specifically wide enough to fit thickness and buffer
             #when it reaches that width on bottom 
-            line.end=(calcEndpoint(oRadius,y,increment,buffer,False) * (-1 if i==0 else 1)) if abs(y)<oRadius else (0 if tailSpace==False else (-tailCoord if i==0 else tailCoord))
-            #just adding extra line for clarity
-            line.end=relativeMin(line.end,xMin if i==0 else xMax)
-            if tailCoord==0 and line.end!=xMax and line.end!=xMin and abs(line.end*2)>thickness+buffer:
-                tailCoord=abs(line.end)
-                print("tailcoord",tailCoord)
-            
-            if abs(line.end)<=tailCoord and y<0:
-                tailSpace=True
-
+            if tailZone==True:
+                if y>-oRadius-increment:
+                    line.end=-thickness-buffer
+                else:
+                    line.end=xMax
+            else:
+                line.end=(calcEndpoint(oRadius,y,increment,buffer,False) * (-1 if i==0 else 1)) if abs(y)<oRadius else (0 if tailSpace==False else (-tailCoord if i==0 else tailCoord))
+                #just adding extra line for clarity
+                #line.end=relativeMin(line.end,xMin if i==0 else xMax)
+                if tailCoord==0 and line.end!=xMax and line.end!=xMin and abs(line.end*2)>thickness+buffer:
+                    tailCoord=abs(line.end)
+                    print("tailcoord",tailCoord)
             xTarg=(line.end if rightwards else xMin) if i==0 else ((xMax if rightwards else line.end))
             #print(x,line.end,rightwards)
             x=(x if rightwards else line.end) if i==0 else ((line.end if rightwards else x))
