@@ -1,4 +1,5 @@
 from math import sqrt,floor,isnan
+from io import TextIOWrapper
         
 class LineBoundaries:
     def __init__(self,y):
@@ -9,8 +10,8 @@ class LineBoundaries:
 def calcEndpoint(radius:float,y:float,increment:float,buffer:float,inner:bool=True):
     raw=sqrt(abs(radius**2-y**2))
     val=floor(raw)
-    #not radius-val actually 
-    while (val%increment!=0 and abs(raw-val)<buffer) :
+    #add
+    while (val%increment!=0 and abs(raw-val)<=buffer) :
         #print(radius-val)
         val=val-1 if inner else val+1
         #print(val)
@@ -66,3 +67,16 @@ def relativeMax(val1:float,val2:float):
         return val1
     else:
         return val2
+    
+def customerInfo(value,doc:TextIOWrapper):
+    entered=input(f"{value}?")
+    if(entered.length):
+        doc.write(f";{value}:{entered}\n")
+        
+def movement(num,increment):
+    if num%increment==0:
+        print(num,'return 1')
+        return '1'
+    else:
+        print(num,'return 0')
+        return '0'
