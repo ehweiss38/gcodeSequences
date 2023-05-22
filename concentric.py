@@ -13,9 +13,13 @@
 
 
 
-from helpers.helpers import modFloor,calcEndpoint,LineBoundaries,setCircleVals,setValues,effectiveVal,relativeMin,relativeMax
+from helpers.helpers import modFloor,calcEndpoint,LineBoundaries,setCircleVals,setValues,effectiveVal,relativeMin,relativeMax,customerInfo
 from math import ceil
 from os import path
+
+
+
+
 
 
 fileName=input('Enter file name')
@@ -27,9 +31,12 @@ f=None
 if path.isfile(fileName):f=open(fileName,"w")
 else: f=open(fileName,"x")
 
+#for info in infoFields:
+#    customerInfo(info,f)
+#infoFields=["Customer Name", "Sample ID", "Phyical Dimensions of Sample",'Physical Dimensions of Test Fixture',"Areas to avoid","[0,0,0] Location","Test Limits X","Test Limits Y","Test Limits Z","Special Considerations"]
 
-thickness=setCircleVals('thickness',50)
-radius=setCircleVals('radius',170)
+thickness=setCircleVals('thickness',25)
+radius=setCircleVals('radius',70)
 buffer=setCircleVals('buffer',10)
 increment=setCircleVals('increment',10)
 
@@ -55,19 +62,19 @@ oRadius=radius+thickness
 xMax=None
 #need to further consider negative cases
 while xMax==None:
-    xMax=effectiveVal(increment,setValues('x',True,250,oRadius))
+    xMax=effectiveVal(increment,setValues('x',True,140,oRadius))
     if xMax==None:print(f"Value must be greater than outer-radius({oRadius})")
 xMin=None
 while xMin==None:
-    xMin=-effectiveVal(increment,setValues('x',False,250,oRadius))
+    xMin=-effectiveVal(increment,setValues('x',False,140,oRadius))
     if xMax==None:print(f"Value must be greater than outer-radius({oRadius})")
 yMax=None
 while yMax==None:
-    yMax=effectiveVal(increment,setValues('y',True,250,oRadius))
+    yMax=effectiveVal(increment,setValues('y',True,140,oRadius))
     if yMax==None:print(f"Value must be greater than outer-radius({oRadius})")
 yMin=None
 while yMin==None:
-    yMin=-effectiveVal(increment,setValues('y',False,250,oRadius))
+    yMin=-effectiveVal(increment,setValues('y',False,140,oRadius))
     if yMax==None:print(f"Value must be greater than outer-radius({oRadius})")
 
 x=0
@@ -80,9 +87,9 @@ tailWidth=2*thickness
 pathRadius=modFloor(radius-buffer,increment)
 yTargH=min(pathRadius,yMax-increment)
 hBarrier=True if yTargH!=pathRadius else False
-#offset by 1 more at start
-yStart=yTargH-increment
-y=yTargH
+#remove offset
+yStart=yTargH#-increment
+y=yStart
 if hBarrier==False:y+=increment
 yTargL=relativeMin(-pathRadius,yMin+increment)
 lBarrier=True if yTargL!=-pathRadius else False
@@ -92,9 +99,10 @@ lBarrier=True if yTargL!=-pathRadius else False
 #can still do it otherwise, just only go as far as if it divisible
 #deciding to work from center, even though it takes longer
 #reason being is other wise, there could be some combinations of buffers and increments that wouldnt be centered a 0
-yStart=yTargH-increment
-yFinish=yTargL
-x=calcEndpoint(radius,yStart,increment, buffer)
+yStart=yTargH
+yFinish=yTargL-increment
+#gotta change to 0
+x=0#calcEndpoint(radius,yStart,increment, buffer)
 downwards=True
 rightwards=False
 zIncrement=setCircleVals('z-increment',30)
@@ -112,29 +120,38 @@ if(yMax!=0):
 #think it messes up if it starts wrong because it starts counting as if it is in right place, so ends up short
 
 
-
+firstMove=True
 
 if hBarrier:y+=increment
 zLimit=thickness
+f.write(f"G1 X{x} Y{y} Z{z} (chilipeppr_pause)\n")
 while z<zLimit:
+    print('zloop')
     #redundant reading here...
     
-    f.write(f"G1 X{x} Y{y} Z{z} (chilipeppr_pause);layer {z}\n\n")
     
     while(y>=yFinish if downwards else y<=yFinish):
         
+        print(yTargL,y)
         lineEnd=calcEndpoint(radius,y,increment,buffer)
         
         #Pretty sure this is no longer needed
+
         if(y!=0):
+            #remove relative min
+            
             x=relativeMin(-lineEnd if rightwards else lineEnd,xMin if rightwards else xMax)
             #xTarg 
             xTarg=relativeMin(lineEnd if rightwards else -lineEnd,xMax if rightwards else xMin)
+            print(xTarg)
         else:
-            xTarg=-x
+            x=-radius if rightwards else radius
+            xTarg=radius if rightwards else -radius
         #the issue is if it is full you want the extra point (only 1 x), but otherwise you want it to stop
-
-        if y!=yStart:
+        
+        if firstMove:
+            firstMove=False
+        else:
             f.write(f"G1 X{x} Y{y} (chilipeppr_pause)\n")
         while x<xTarg if rightwards else x>xTarg:
             x+=increment if rightwards else -increment
@@ -142,13 +159,13 @@ while z<zLimit:
             f.write(f"G1 X{x} Y{y} (chilipeppr_pause)\n")
         y+=-increment if downwards else increment
         rightwards=False if rightwards else True
-    y+=increment if downwards else -increment
+
     downwards=False if downwards else True
     z+=zIncrement
     yFinish=yTargL if downwards else yTargH
-    if z<=zLimit:f.write(f"G1 X{x} Y{y} Z{z};layer {z} \n\n")
+    if z<=zLimit:f.write(f"G1 X{x} Y{y} Z{z} (chilipeppr_pause)\n")
 #above by some measure
-f.write(f"G0 X0 Y0 Z{z};layer {z}\n")
+f.write(f"G0 X0 Y0 Z{z}\n")
 
 #deprecated feature
 tailCoord=0
@@ -157,10 +174,10 @@ y=yMax
 #still above
 x=0
 print(x)
-f.write(f"G0 X{x} Y{y} (chilipeppr_pause)\n")
+f.write(f"G0 X{x} Y{y}\n")
 z-=zIncrement
 #moves down
-f.write(f"G0 X{x} Y{y} Z{z} (chilipeppr_pause);layer {z}\n")
+f.write(f"G0 X{x} Y{y} Z{z}\n")
 
 #clearance so i
 
@@ -177,16 +194,16 @@ tempYmin=yMin
 while(z>=0):
     yMin=tempYmin
     #print('Z',z)
-    f.write(f"G1 X{x} Y{yMax} Z{z} (chilipeppr_pause);layer {z}\n")
+    f.write(f"G1 X{x} Y{yMax} Z{z} (chilipeppr_pause)\n")
     for i in range(0,2):
+        yMin=tempYmin
         tailZone=False
         tailSpace=False
         softLim=False
+        
         rightwards=True if i==1 else False
         xTarg=xMax if rightwards else xMin
-        if i==0 and y<0:
-            softLim=True
-        if i==1:
+        if i==0:
             yMin=-oRadius+thickness
         #tecnically overshoots a little and goes back
         while y>=yMin:
@@ -205,13 +222,11 @@ while(z>=0):
             #best way is to adjust for widest point in circle before it closes
             #more specifically wide enough to fit thickness and buffer
             #when it reaches that width on bottom 
-            if softLim==True:
-                line.end=relativeMax(-calcEndpoint(oRadius,y,increment,buffer,False),-thicknessBuffer)
-            elif tailZone==True:
+            if tailZone==True:
                 if y>=-oRadius-thickness:
-                    line.end=-thicknessBuffer
+                    line.end=thicknessBuffer
                 else:
-                    line.end=xMax
+                    line.end=xMin
             else:
                 line.end=(calcEndpoint(oRadius,y,increment,buffer,False) * (-1 if i==0 else 1)) if abs(y)<oRadius else (0 if tailSpace==False else (-tailCoord if i==0 else tailCoord))
                 #just adding extra line for clarity
@@ -239,7 +254,7 @@ while(z>=0):
 
 yMin=tempYmin
 x=xMax
-f.write(f"G0 X{x} Y{yMax} Z{0};layer {z}\n")
+f.write(f"G0 X{x} Y{yMax} Z{0}\n")
 downwards=True
 #few issues, need seperate variables for coil height and total height, so know when to switch to others, because 0 is in center of coil
 
@@ -254,10 +269,10 @@ downwards=True
 z= ceil(thickness/zIncrement)*zIncrement
 
 print("xmax",xMax)
-f.write(f"G0 X{x} Y{yMax}Z{z} (chilipeppr_pause);layer {z}\n")
+f.write(f"G0 X{x} Y{yMax}Z{z} \n")
 
 #seems to cross too much right here
-
+rightwards=False
 #print('z',z,'ztarg',zTarg)
 while(z<=zTarg):
 #a little connfusing but low meaninng start, high finish, irrespective of actual values
@@ -277,16 +292,16 @@ while(z<=zTarg):
         rightwards=False if rightwards else True
         if y!=highY:y+=-1*increment if downwards else increment
         else: break
-        f.write(f"G1 X{x} Y{y} Z{z} (chilipeppr_pause);layer {z}\n")
+        f.write(f"G1 X{x} Y{y} Z{z} (chilipeppr_pause)\n")
         #print(f"{y}-y {z}-z level complete\n")
     if z!=zTarg:z+=zIncrement
     else:break
     
-    f.write(f"G1 X{x} Y{y} Z{z} (chilipeppr_pause);layer {z}\n")
+    f.write(f"G1 X{x} Y{y} Z{z} (chilipeppr_pause)\n")
     downwards=False if downwards else True
     #print(f"{z} z level complete\n")
 
-f.write(f"G0 X0 Y0 Z{zTarg};layer {z}\n")
+f.write(f"G0 X0 Y0 Z{zTarg}\n")
 f.write(f"G0 X0 Y0 Z0\n")
 print('closing')
 f.close()
