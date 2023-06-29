@@ -1,6 +1,12 @@
 from helpers.helpers import modFloor, calcEndpoint, LineBoundaries, setCircleVals, setValues, effective_val, \
-    relativeMin, GCodeDoc
+    relativeMin, GCodeDoc, display_options, EndValue
 from math import ceil
+
+# One thing i will need to consider as I adapt this to the broader application is flexbility
+# this can only produce orthogonal, so improving the algorithms so that they dont necessarilly each require own function
+
+
+# Not perfect, but good enough for now
 
 '''
 Can be thought of as three sequences
@@ -11,9 +17,14 @@ Can be thought of as three sequences
 
 3. Work way up from the face
     a. tricky part is dealing with the circle, need to move forward and back, or in and out
-    
+
 
 '''
+# i think best way to go is dynamic x max that adjusts based on y and brace
+# where it gets tricky is how you want to approach flexibility of this
+# for that issue, i think all of the end values should be classes, calculates based on coordinate obstructions.
+# Some degree of felxibility, also curious how it will interact with thickness. Does lend itself nicely to c# version
+
 
 gcode = GCodeDoc(input('Enter file name'))
 
@@ -21,38 +32,56 @@ thickness = setCircleVals('thickness', 25)
 radius = setCircleVals('radius', 70)
 buffer = setCircleVals('buffer', 10)
 increment = setCircleVals('increment', 10)
+brace_plane = {1: False, 2: False, 3: False, 4: False}
+
+brace = setCircleVals('brace', 0)
+if brace != 0:
+    brace_plane[
+        display_options(
+            "Which plane is brace on?\n1. Right-most\n2. Left-most\n3. Back-most\n4. Front-most ", 1, 4)] = True
 
 outer_radius = radius + thickness
 x_max = None
 # need to further consider negative cases
 while x_max is None:
-    x_max = effective_val(setValues('x', True, 140, outer_radius), increment)
+    x_max = EndValue(effective_val(setValues('x', True, radius if brace_plane[2] else 140, outer_radius), increment),
+                     brace if brace_plane[1] else 0, -thickness)
     if x_max is None:
         print(f"Value must be greater than outer-radius({outer_radius})")
 x_min = None
 while x_min is None:
-    x_min = effective_val(setValues('x', False, -140, outer_radius), increment)
-    if x_max is None:
+    x_min = EndValue(effective_val(setValues('x', False, radius if brace_plane[2] else -140, outer_radius), increment),
+                     brace if brace_plane[2] else 0, -thickness)
+    if x_min is None:
         print(f"Value must be greater than outer-radius({outer_radius})")
 y_max = None
 while y_max is None:
-    y_max = effective_val(setValues('y', True, 140, outer_radius), increment)
+    y_max = EndValue(effective_val(setValues('y', True, radius if brace_plane[3] else 140, outer_radius), increment),
+                     brace if brace_plane[3] else 0, -thickness)
     if y_max is None:
         print(f"Value must be greater than outer-radius({outer_radius})")
 y_min = None
 while y_min is None:
-    y_min = effective_val(setValues('y', False, radius, radius), increment)
+    # this probably should not be hardcoded as such
+    y_min = EndValue(effective_val(setValues('y', False, -radius if brace_plane[4] else -140, radius), increment),
+                     brace if brace_plane[4] else 0, -thickness)
     if y_max is None:
         print(f"Value must be greater than outer-radius({outer_radius})")
 
 x = 0
 
+zIncrement = setCircleVals('z-increment', 10)
+z_min = effective_val(-thickness, zIncrement)
+# print(zMin, zIncrement)
+z = 0
+z_targ = effective_val(setCircleVals('z-max', outer_radius), zIncrement)
+
 effective_radius = modFloor(radius - buffer, increment)
-y_targ_high = min(effective_radius, y_max - increment)
+y_targ_high = min(effective_radius, y_max.calc_end(z, True) - increment)
 # remove offset
 # print(y_targ_high)
 y = y_targ_high - increment
-y_targ_low = relativeMin(-effective_radius, y_min + increment)
+y_targ_low = relativeMin(-effective_radius, y_min.calc_end(z, True) + increment)
 # print(y_targ_low)
 y_start = y_targ_high
 y_finish = y_targ_low
@@ -61,11 +90,6 @@ x = calcEndpoint(radius, y_start, increment, buffer)
 
 downwards = True
 rightwards = False
-zIncrement = setCircleVals('z-increment', 10)
-z_min = effective_val(-thickness, zIncrement)
-# print(zMin, zIncrement)
-z = 0
-z_targ = effective_val(setCircleVals('z-max', outer_radius), zIncrement)
 
 # wholly redundant
 # gcode.g0(0, 0, z)
@@ -78,7 +102,7 @@ z_limit = 0
 # print('z', )
 y += increment
 
-if y_max != 0:
+if y_max.calc_end(z) != 0:
     gcode.g0(x, y, z)
 
 gcode.g1(x, y, z)
@@ -99,8 +123,10 @@ while z >= z_min:
         if y != 0:
             # remove relative min
 
-            x = relativeMin(-line_end if rightwards else line_end, x_min if rightwards else x_max)
-            x_targ = relativeMin(line_end if rightwards else -line_end, x_max if rightwards else x_min)
+            x = relativeMin(-line_end if rightwards else line_end,
+                            x_min.calc_end(z, True) if rightwards else x_max.calc_end(z, True))
+            x_targ = relativeMin(line_end if rightwards else -line_end,
+                                 x_max.calc_end(z, True) if rightwards else x_min.calc_end(z, True))
             # print(x_targ)
         else:
             x_targ = -x
@@ -120,18 +146,25 @@ while z >= z_min:
 
     downwards = False if downwards else True
     z -= zIncrement
+    print(z, z_limit)
     y_finish = y_targ_low if downwards else y_targ_high
-    if z >= z_limit:
+    if z >= z_min:
+        print('z', z)
         gcode.g1(x, y, int(z))
 # above by some measure
 x = y = 0
+if z < z_min:
+    z += zIncrement
 gcode.g0(x, y, int(z))
+gcode.g0(x, y, zIncrement)
 
 # dump
-y = y_max
-gcode.g0(x, y, z)
-z = z_min
+# need to make this rotatable
 
+y = y_max.calc_end(z)
+gcode.g0(x, y, zIncrement)
+z = z_min
+gcode.g0(x, y, z)
 # think this might be useless
 thickness_buffer = (ceil(thickness / 10) + ceil(buffer / 10)) * 10
 
@@ -141,15 +174,12 @@ thickness_buffer = (ceil(thickness / 10) + ceil(buffer / 10)) * 10
 
 while z <= 0:
     # print('Z',z)
-    gcode.g1(x, y_max, int(z))
+    gcode.g1(x, y_max.calc_end(z), int(z))
     for i in range(0, 2):
 
         rightwards = True if i == 1 else False
-        x_targ = x_max if rightwards else x_min
-        if i == 0:
-            y_min = -outer_radius + thickness
-        # tecnically overshoots a little and goes back
-        while y >= y_min:
+        x_targ = x_max.calc_end(z) if rightwards else x_min.calc_end(z)
+        while y >= y_min.calc_end(z):
             # still need to put line switch in
             # also need to consider before where circle starts
             # logic would be if(abs(y)>oRadius)
@@ -166,26 +196,27 @@ while z <= 0:
             line_end = (calcEndpoint(outer_radius, y, increment, buffer, False) * (-1 if i == 0 else 1)) if abs(
                 y) < outer_radius else 0
             # just adding extra line for clarity
-            x_targ = (line_end if rightwards else x_min) if i == 0 else (x_max if rightwards else line_end)
+            x_targ = (line_end if rightwards else x_min.calc_end(z)) if i == 0 else (
+                x_max.calc_end(z) if rightwards else line_end)
             # print(x,line.end,rightwards)
             x = (x if rightwards else line_end) if i == 0 else (line_end if rightwards else x)
-            if y >= y_min:
+            if y >= y_min.calc_end(z):
                 gcode.g1(x, y)
             # add cable gap later
-        if x != (x_min if i == 0 else x_max):
+        if x != (x_min.calc_end(z) if i == 0 else x_max.calc_end(z)):
             # this is a major logic error, and it is causing the error
-            x = x_min if i == 0 else x_max
-            gcode.g0(x, y_min)
+            x = x_min.calc_end(z) if i == 0 else x_max.calc_end(z)
+            gcode.g0(x, y_min.calc_end(z))
             # f.write(f"G0 X{x} Y{y}\n")
-        y = y_max
+        y = y_max.calc_end(z)
         gcode.g0(x, y)
         x = 0
         gcode.g0(x, y)
     z += zIncrement
     # print(x, y)
 
-x = x_min
-y = y_max
+x = x_min.calc_end(z)
+y = y_max.calc_end(z)
 
 gcode.g0(x, y, z)
 gcode.g1(x, y, z)
@@ -194,6 +225,10 @@ downwards = True
 rightwards = True
 
 # print(z_targ)
+
+# didnt properly consider height of probe
+# worth also considering length of probe
+
 
 while z <= z_targ:
     inner_lims = None
@@ -208,10 +243,10 @@ while z <= z_targ:
                                                                                                                outer_radius - z,
                                                                                                                inner=False)
     # so it will never have to backtrack
-    x_targ = x_max if rightwards else x_min
+    x_targ = x_max.calc_end(z) if rightwards else x_min.calc_end(z)
     while (x < x_targ) if rightwards else (x > x_targ):
         # issue only going up to inner radius, just variable declaration i think
-        y_targ = y_min if downwards else y_max
+        y_targ = y_min.calc_end(z) if downwards else y_max.calc_end(z)
         if downwards and (abs(x) > outer_lims or (inner_lims is not None and abs(x) < inner_lims)):
             y_targ -= effective_val(thickness, increment)
         while y > y_targ if downwards else y < y_targ:
