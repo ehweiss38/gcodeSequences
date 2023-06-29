@@ -59,16 +59,16 @@ def modFloor(number, divisor):
     # 17.25 1 1
     number = floor(number / 10)
     while number % (divisor / 10) != 0:
-        print(number)
+        # print(number)
         --number
     return number * 10
 
 
 def setValues(name: str, maximum: bool, default: float, min: float = None, absV=False):
     inpVal = input(f"Enter {'maximum' if maximum else 'minimum'} {name}-value (cm)")
-    print('iv', inpVal)
+    # print('iv', inpVal)
     if len(inpVal) == 0 or isnan(float(inpVal)):
-        print('def', default)
+        # print('def', default)
         return default
     val = abs(float(inpVal) * 10) if absV else float(inpVal) * 10
     # if min!=None and val<min:return None
@@ -128,3 +128,30 @@ def movement(num, increment):
     else:
         # print(num,'return 0')
         return '0'
+
+
+class EndValue:
+    def __init__(self, end_val: int, brace_val: int = 0, brace_start: int = 0, buffer: int = 10):
+        self.end_val = end_val
+        self.brace_val = brace_val
+        self.brace_start = brace_start
+        self.buffer = buffer
+        print(self.end_val, self.brace_val, self.brace_start, self.buffer)
+
+    def calc_end(self, z, override: bool = False):
+        # if self.brace_val != 0:
+        # print(self.end_val, self.brace_val, self.brace_start, self.buffer)
+        if override or self.brace_val == 0 or z > self.brace_val + self.brace_start:
+            return self.end_val
+        else:
+            return (abs(self.end_val) - (
+                        self.brace_val - (z - self.brace_start)) - self.buffer) * -1 if self.end_val < 0 else 1
+
+
+def display_options(text: str, low: int, high: int) -> int:
+    while True:
+        selection: str = input(text)
+        num_selection = int(selection[0])
+        if high >= num_selection >= low:
+            return num_selection
+        print("Invalid Selection, please select again")
